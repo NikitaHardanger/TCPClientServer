@@ -1,43 +1,33 @@
 #include <iostream>
-#include <boost/asio.hpp>
-#include <array>
+#include <thread>
+#include <TCPNetworking/client/tcp_client.h>
 
 
 
-using boost::asio::ip::tcp;
+using namespace TCP;
 
 int main(int argc, char* argv[]) {
+    TCPClient client {"localhost", 1337};
 
-    try {
-        boost::asio::io_context io_context;
+    client.onMessage= [](const std::string& message) {
+        std::cout << message;
+    };
 
-        tcp::resolver resolver { io_context };
+    std::thread t { [&client] () {
+        client.Run();
+    }};
 
-        auto endpoints = resolver.resolve("127.0.1.1", "1337");
+    while (true) {
+        std::string message;
+        getline(std::cin, message);
 
-        tcp::socket socket {io_context };
-        boost::asio::connect(socket, endpoints);
+        if (message == "\\q") break;
+        message += "\n";
 
-        while (true) {
-            // Listen for messages
-            std::array<char, 128> buf {};
-
-            boost::system::error_code error;
-
-            size_t len = socket.read_some(boost::asio::buffer(buf), error);
-
-            if (error == boost::asio::error::eof) {
-                // Clean connection cut off
-                break;
-            } else if (error) {
-                throw boost::system::system_error(error);
-            }
-
-            std::cout.write(buf.data(), len);
-        }
-
-    } catch (std::exception& e) {
-        std::wcerr << e.what() << std::endl;
+        client.Post(message);
     }
+
+    client.Stop();
+    t.join();
     return 0;
 }
